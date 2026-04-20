@@ -11,11 +11,12 @@ spec:
   serviceAccountName: jenkins
   containers:
     - name: kaniko
-      image: gcr.io/kaniko-project/executor:debug
+      image: gcr.io/kaniko-project/executor:v1.16.0-debug
+      imagePullPolicy: Always
       command:
-        - /busybox/sh
-        - -c
-        - cat
+        - sleep
+      args:
+        - 99d
       tty: true
       volumeMounts:
         - name: docker-config
@@ -23,12 +24,9 @@ spec:
     - name: git
       image: alpine/git:2.45.2
       command:
-        - cat
-      tty: true
-    - name: yq
-      image: mikefarah/yq:4.44.2
-      command:
-        - cat
+        - sleep
+      args:
+        - 99d
       tty: true
   volumes:
     - name: docker-config
@@ -43,13 +41,17 @@ spec:
     GITOPS_REPO    = 'https://github.com/AndriiRohovenko/django-gitops.git'
     GITOPS_BRANCH  = 'main'
     GITOPS_VALUES  = 'charts/django-app/values.yaml'
-    IMAGE_TAG      = "${env.GIT_COMMIT.take(7)}"
+    COMMIT_EMAIL   = 'jenkins@local'
+    COMMIT_NAME    = 'Jenkins'
   }
 
   stages {
     stage('Checkout') {
       steps {
         checkout scm
+        script {
+          env.IMAGE_TAG = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+        }
       }
     }
 
@@ -61,11 +63,9 @@ spec:
             string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
           ]) {
             sh '''
-              cat > /kaniko/.docker/config.json <<EOF
-              {
-                "credsStore": "ecr-login"
-              }
-              EOF
+              set -eux
+
+              printf '{"credsStore":"ecr-login"}' > /kaniko/.docker/config.json
 
               /kaniko/executor \
                 --context "$WORKSPACE/app" \
@@ -85,6 +85,8 @@ spec:
         container('git') {
           withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
             sh '''
+              set -eux
+
               apk add --no-cache yq
 
               rm -rf gitops
@@ -94,8 +96,9 @@ spec:
 
               yq -i '.image.tag = env(IMAGE_TAG)' "$GITOPS_VALUES"
 
-              git config user.name "Jenkins"
-              git config user.email "jenkins@local"
+              git config user.email "$COMMIT_EMAIL"
+              git config user.name "$COMMIT_NAME"
+
               git add "$GITOPS_VALUES"
               git commit -m "Update django image tag to $IMAGE_TAG" || true
               git push https://AndriiRohovenko:${GITHUB_TOKEN}@github.com/AndriiRohovenko/django-gitops.git "$GITOPS_BRANCH"
