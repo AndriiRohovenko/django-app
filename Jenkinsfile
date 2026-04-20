@@ -11,9 +11,11 @@ spec:
   serviceAccountName: jenkins
   containers:
     - name: kaniko
-      image: gcr.io/kaniko-project/executor:latest
+      image: gcr.io/kaniko-project/executor:debug
       command:
-        - /busybox/cat
+        - /busybox/sh
+        - -c
+        - cat
       tty: true
       volumeMounts:
         - name: docker-config
@@ -36,15 +38,21 @@ spec:
   }
 
   environment {
-    AWS_REGION       = 'eu-central-1'
-    ECR_REPOSITORY   = '165690630824.dkr.ecr.eu-central-1.amazonaws.com/lesson-7-ecr'
-    GITOPS_REPO      = 'https://github.com/AndriiRohovenko/django-gitops.git'
-    GITOPS_BRANCH    = 'main'
-    GITOPS_VALUES    = 'charts/django-app/values.yaml'
-    IMAGE_TAG        = "${env.GIT_COMMIT.take(7)}"
+    AWS_REGION     = 'eu-central-1'
+    ECR_REPOSITORY = '165690630824.dkr.ecr.eu-central-1.amazonaws.com/lesson-7-ecr'
+    GITOPS_REPO    = 'https://github.com/AndriiRohovenko/django-gitops.git'
+    GITOPS_BRANCH  = 'main'
+    GITOPS_VALUES  = 'charts/django-app/values.yaml'
+    IMAGE_TAG      = "${env.GIT_COMMIT.take(7)}"
   }
 
   stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
     stage('Build and Push Image') {
       steps {
         container('kaniko') {
