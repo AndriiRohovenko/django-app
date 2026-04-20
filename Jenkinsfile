@@ -85,25 +85,15 @@ spec:
         container('git') {
           withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
             sh '''
+              apk add --no-cache yq
+
               rm -rf gitops
               git clone https://AndriiRohovenko:${GITHUB_TOKEN}@github.com/AndriiRohovenko/django-gitops.git gitops
               cd gitops
               git checkout "$GITOPS_BRANCH"
-            '''
-          }
-        }
 
-        container('yq') {
-          sh '''
-            cd gitops
-            yq -i '.image.tag = env(IMAGE_TAG)' "$GITOPS_VALUES"
-          '''
-        }
+              yq -i '.image.tag = env(IMAGE_TAG)' "$GITOPS_VALUES"
 
-        container('git') {
-          withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-            sh '''
-              cd gitops
               git config user.name "Jenkins"
               git config user.email "jenkins@local"
               git add "$GITOPS_VALUES"
